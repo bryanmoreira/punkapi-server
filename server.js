@@ -171,6 +171,84 @@ app.get('/v2/beers/malt/:maltName', (req, res) => {
   });
 });
 
+app.get('/v2/beers/food/:foodName', (req, res) => {
+  const foodName = req.params.foodName;
+
+  // Abra uma conexão com o banco de dados SQLite
+  const db = new sqlite3.Database(dbPath);
+
+  // Instrução SQL para selecionar cervejas que combinam com o alimento específico
+  const selectBeersByFoodSQL = `
+    SELECT * FROM beers WHERE food_pairing LIKE '%' || ? || '%'
+  `;
+
+  // Execute a consulta SQL passando o nome do alimento como parâmetro
+  db.all(selectBeersByFoodSQL, [foodName], (err, rows) => {
+    if (err) {
+      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar cervejas' });
+    } else {
+      // Se as cervejas forem encontradas, envie os dados como resposta
+      res.json(rows);
+    }
+
+    // Feche a conexão com o banco de dados SQLite
+    db.close();
+  });
+});
+
+app.get('/v2/beers/name/:beerName', (req, res) => {
+  const beerName = req.params.beerName;
+
+  // Abra uma conexão com o banco de dados SQLite
+  const db = new sqlite3.Database(dbPath);
+
+  // Instrução SQL para selecionar cervejas pelo nome
+  const selectBeersByNameSQL = `
+    SELECT * FROM beers WHERE name LIKE '%' || ? || '%'
+  `;
+
+  // Execute a consulta SQL passando o nome da cerveja como parâmetro
+  db.all(selectBeersByNameSQL, [beerName], (err, rows) => {
+    if (err) {
+      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar cervejas' });
+    } else {
+      // Se as cervejas forem encontradas, envie os dados como resposta
+      res.json(rows);
+    }
+
+    // Feche a conexão com o banco de dados SQLite
+    db.close();
+  });
+});
+
+app.get('/v2/beers/ibu/:ibuValue', (req, res) => {
+  const ibuValue = req.params.ibuValue;
+
+  // Abra uma conexão com o banco de dados SQLite
+  const db = new sqlite3.Database(dbPath);
+
+  // Instrução SQL para selecionar cervejas pelo valor de IBU
+  const selectBeersByIbuSQL = `
+    SELECT * FROM beers WHERE ibu = ?
+  `;
+
+  // Execute a consulta SQL passando o valor de IBU como parâmetro
+  db.all(selectBeersByIbuSQL, [ibuValue], (err, rows) => {
+    if (err) {
+      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar cervejas' });
+    } else {
+      // Se as cervejas forem encontradas, envie os dados como resposta
+      res.json(rows);
+    }
+
+    // Feche a conexão com o banco de dados SQLite
+    db.close();
+  });
+});
+
 
 // Inicie o servidor Express
 app.listen(PORT, () => {
