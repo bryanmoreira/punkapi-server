@@ -42,7 +42,7 @@ function migrateDataToSQLite() {
     mash_temp_duration INTEGER,
     fermentation_temp_value REAL,
     fermentation_temp_unit TEXT,
-    yeast TEXT,
+    malt TEXT,
     food_pairing REAL,
     brewers_tips TEXT,
     contributed_by TEXT
@@ -71,14 +71,14 @@ function migrateDataToSQLite() {
                 (id, name, tagline, first_brewed, description, image_url, abv, ibu, target_fg, target_og, 
                  ebc, srm, ph, attenuation_level, volume_value, volume_unit, boil_volume_value, boil_volume_unit, 
                  mash_temp_temp_value, mash_temp_temp_unit, mash_temp_duration, fermentation_temp_value, 
-                 fermentation_temp_unit, yeast, food_pairing, brewers_tips, contributed_by) 
+                 fermentation_temp_unit, malt, food_pairing, brewers_tips, contributed_by) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
           [beerData.id, beerData.name, beerData.tagline, beerData.first_brewed, beerData.description, beerData.image_url, 
            beerData.abv, beerData.ibu, beerData.target_fg, beerData.target_og, beerData.ebc, beerData.srm, beerData.ph, 
            beerData.attenuation_level, beerData.volume.value, beerData.volume.unit, beerData.boil_volume.value, 
            beerData.boil_volume.unit, beerData.method.mash_temp[0].temp.value, beerData.method.mash_temp[0].temp.unit, 
            beerData.method.mash_temp[0].duration, beerData.method.fermentation.temp.value, beerData.method.fermentation.temp.unit, 
-           beerData.ingredients.yeast, beerData.food_pairing[0] ,beerData.brewers_tips, beerData.contributed_by], 
+           beerData.ingredients.malt[0]?.name, beerData.food_pairing[0] ,beerData.brewers_tips, beerData.contributed_by], 
           (err) => {
             if (err) {
               console.error('Failed to insert beer into database:', err);
@@ -138,6 +138,32 @@ app.get('/v2/beers/:id', (req, res) => {
     } else {
       // Se a cerveja for encontrada, envie os dados da cerveja como resposta
       res.json(row);
+    }
+
+    // Feche a conexão com o banco de dados SQLite
+    db.close();
+  });
+});
+
+app.get('/v2/beers/malt/:maltName', (req, res) => {
+  const maltName = req.params.maltName;
+
+  // Abra uma conexão com o banco de dados SQLite
+  const db = new sqlite3.Database(dbPath);
+
+  // Instrução SQL para selecionar cervejas que contenham o malte específico
+  const selectBeersByMaltSQL = `
+    SELECT * FROM beers WHERE malt LIKE '%' || ? || '%'
+  `;
+
+  // Execute a consulta SQL passando o nome do malte como parâmetro
+  db.all(selectBeersByMaltSQL, [maltName], (err, rows) => {
+    if (err) {
+      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar cervejas' });
+    } else {
+      // Se as cervejas forem encontradas, envie os dados como resposta
+      res.json(rows);
     }
 
     // Feche a conexão com o banco de dados SQLite
