@@ -43,7 +43,7 @@ function migrateDataToSQLite() {
     fermentation_temp_value REAL,
     fermentation_temp_unit TEXT,
     malt TEXT,
-    food_pairing REAL,
+    food_pairing TEXT,
     brewers_tips TEXT,
     contributed_by TEXT
   )`, (err) => {
@@ -56,10 +56,10 @@ function migrateDataToSQLite() {
     fs.readdir(dataPath, (err, files) => {
       if (err) {
         console.error('Failed to read directory:', err);
-        db.close(); // Fechar a conexão se houver um erro ao ler o diretório
+        db.close();
         return;
       }
-      
+
       let remainingFiles = files.length;
 
       files.forEach(file => {
@@ -78,7 +78,7 @@ function migrateDataToSQLite() {
            beerData.attenuation_level, beerData.volume.value, beerData.volume.unit, beerData.boil_volume.value, 
            beerData.boil_volume.unit, beerData.method.mash_temp[0].temp.value, beerData.method.mash_temp[0].temp.unit, 
            beerData.method.mash_temp[0].duration, beerData.method.fermentation.temp.value, beerData.method.fermentation.temp.unit, 
-           beerData.ingredients.malt[0]?.name, beerData.food_pairing[0] ,beerData.brewers_tips, beerData.contributed_by], 
+           beerData.ingredients.malt[0]?.name, beerData.food_pairing[0], beerData.brewers_tips, beerData.contributed_by], 
           (err) => {
             if (err) {
               console.error('Failed to insert beer into database:', err);
@@ -87,9 +87,8 @@ function migrateDataToSQLite() {
             }
             remainingFiles--;
 
-            // Verificar se todas as inserções foram concluídas
             if (remainingFiles === 0) {
-              db.close(); // Fechar a conexão quando todas as inserções forem concluídas
+              db.close();
             }
           }
         );
@@ -98,36 +97,62 @@ function migrateDataToSQLite() {
   });
 }
 
-
 // Inicie a migração dos dados quando o script for executado
 migrateDataToSQLite();
 
 // Configuração das rotas do servidor Express para buscar dados do banco de dados SQLite
 app.get('/v2/beers', (req, res) => {
   const db = new sqlite3.Database(dbPath);
-  
-  db.all('SELECT * FROM beers', (err, rows) => {
+
+  const { malt, food, name, ibu } = req.query;
+
+  let baseSQL = 'SELECT * FROM beers';
+  const conditions = [];
+  const params = [];
+
+  if (malt) {
+    conditions.push('malt LIKE ?');
+    params.push(`%${malt}%`);
+  }
+  if (food) {
+    conditions.push('food_pairing LIKE ?');
+    params.push(`%${food}%`);
+  }
+  if (name) {
+    conditions.push('name LIKE ?');
+    params.push(`%${name}%`);
+  }
+  if (ibu) {
+    conditions.push('ibu = ?');
+    params.push(ibu);
+  }
+
+  if (conditions.length > 0) {
+    baseSQL += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  console.log('SQL Query:', baseSQL);  // Log the SQL query
+  console.log('Parameters:', params);  // Log the parameters
+
+  db.all(baseSQL, params, (err, rows) => {
     if (err) {
-      console.error('Failed to fetch beers from database:', err);
-      res.status(500).json({ error: 'Failed to load data' });
+      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar cervejas' });
     } else {
       res.json(rows);
     }
-  });
 
-  db.close();
+    db.close();
+  });
 });
 
 app.get('/v2/beers/:id', (req, res) => {
   const beerId = req.params.id;
 
-  // Abra uma conexão com o banco de dados SQLite
   const db = new sqlite3.Database(dbPath);
 
-  // Instrução SQL para selecionar uma cerveja pelo ID
   const selectBeerSQL = `SELECT * FROM beers WHERE id = ?`;
 
-  // Execute a consulta SQL passando o ID da cerveja como parâmetro
   db.get(selectBeerSQL, [beerId], (err, row) => {
     if (err) {
       console.error('Erro ao buscar cerveja no banco de dados:', err.message);
@@ -136,121 +161,13 @@ app.get('/v2/beers/:id', (req, res) => {
       console.error('Cerveja não encontrada');
       res.status(404).json({ error: 'Cerveja não encontrada' });
     } else {
-      // Se a cerveja for encontrada, envie os dados da cerveja como resposta
       res.json(row);
     }
 
-    // Feche a conexão com o banco de dados SQLite
     db.close();
   });
 });
 
-app.get('/v2/beers/malt/:maltName', (req, res) => {
-  const maltName = req.params.maltName;
-
-  // Abra uma conexão com o banco de dados SQLite
-  const db = new sqlite3.Database(dbPath);
-
-  // Instrução SQL para selecionar cervejas que contenham o malte específico
-  const selectBeersByMaltSQL = `
-    SELECT * FROM beers WHERE malt LIKE '%' || ? || '%'
-  `;
-
-  // Execute a consulta SQL passando o nome do malte como parâmetro
-  db.all(selectBeersByMaltSQL, [maltName], (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
-      res.status(500).json({ error: 'Erro ao buscar cervejas' });
-    } else {
-      // Se as cervejas forem encontradas, envie os dados como resposta
-      res.json(rows);
-    }
-
-    // Feche a conexão com o banco de dados SQLite
-    db.close();
-  });
-});
-
-app.get('/v2/beers/food/:foodName', (req, res) => {
-  const foodName = req.params.foodName;
-
-  // Abra uma conexão com o banco de dados SQLite
-  const db = new sqlite3.Database(dbPath);
-
-  // Instrução SQL para selecionar cervejas que combinam com o alimento específico
-  const selectBeersByFoodSQL = `
-    SELECT * FROM beers WHERE food_pairing LIKE '%' || ? || '%'
-  `;
-
-  // Execute a consulta SQL passando o nome do alimento como parâmetro
-  db.all(selectBeersByFoodSQL, [foodName], (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
-      res.status(500).json({ error: 'Erro ao buscar cervejas' });
-    } else {
-      // Se as cervejas forem encontradas, envie os dados como resposta
-      res.json(rows);
-    }
-
-    // Feche a conexão com o banco de dados SQLite
-    db.close();
-  });
-});
-
-app.get('/v2/beers/name/:beerName', (req, res) => {
-  const beerName = req.params.beerName;
-
-  // Abra uma conexão com o banco de dados SQLite
-  const db = new sqlite3.Database(dbPath);
-
-  // Instrução SQL para selecionar cervejas pelo nome
-  const selectBeersByNameSQL = `
-    SELECT * FROM beers WHERE name LIKE '%' || ? || '%'
-  `;
-
-  // Execute a consulta SQL passando o nome da cerveja como parâmetro
-  db.all(selectBeersByNameSQL, [beerName], (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
-      res.status(500).json({ error: 'Erro ao buscar cervejas' });
-    } else {
-      // Se as cervejas forem encontradas, envie os dados como resposta
-      res.json(rows);
-    }
-
-    // Feche a conexão com o banco de dados SQLite
-    db.close();
-  });
-});
-
-app.get('/v2/beers/ibu/:ibuValue', (req, res) => {
-  const ibuValue = req.params.ibuValue;
-
-  // Abra uma conexão com o banco de dados SQLite
-  const db = new sqlite3.Database(dbPath);
-
-  // Instrução SQL para selecionar cervejas pelo valor de IBU
-  const selectBeersByIbuSQL = `
-    SELECT * FROM beers WHERE ibu = ?
-  `;
-
-  // Execute a consulta SQL passando o valor de IBU como parâmetro
-  db.all(selectBeersByIbuSQL, [ibuValue], (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar cervejas no banco de dados:', err.message);
-      res.status(500).json({ error: 'Erro ao buscar cervejas' });
-    } else {
-      // Se as cervejas forem encontradas, envie os dados como resposta
-      res.json(rows);
-    }
-
-    // Feche a conexão com o banco de dados SQLite
-    db.close();
-  });
-});
-
-
-// Inicie o servidor Express
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
